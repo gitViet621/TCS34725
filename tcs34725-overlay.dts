@@ -1,0 +1,22 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2835";
+
+    fragment@0 {
+        target = <&i2c1>;  // Use i2c1 for GPIO header I2C
+
+        __overlay__ {
+        status = "okay";
+        #address-cells = <0x01>;
+        #size-cells = <0x00>;
+
+            tcs34725@29 {
+                compatible = "ams,tcs34725";
+                reg = <0x29>;         // I2C address of TCS34725
+                status = "okay";
+            };
+        };
+    };
+};
