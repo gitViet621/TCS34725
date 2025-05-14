@@ -26,6 +26,14 @@
 // IOCTL commands
 #define TCS34725_IOCTL_MAGIC 't'
 #define TCS34725_IOCTL_RGBC_DATA _IOR(TCS34725_IOCTL_MAGIC, 1, struct tcs34725_color)
+#define TCS34725_IOCTL_ENABLE _IOW(TCS34725_IOCTL_MAGIC, 2, u8)
+#define TCS34725_IOCTL_TIMING _IOW(TCS34725_IOCTL_MAGIC, 3, u8)
+#define TCS34725_IOCTL_WAIT_TIME _IOW(TCS34725_IOCTL_MAGIC, 4, u8)
+#define TCS34725_IOCTL_INTERRUPT_THRESHOLD _IOW(TCS34725_IOCTL_MAGIC, 5, struct tcs34725_interrupt_threshold)
+#define TCS34725_IOCTL_PERSISTENCE _IOW(TCS34725_IOCTL_MAGIC, 6, u8)
+#define TCS34725_IOCTL_CONFIG _IOW(TCS34725_IOCTL_MAGIC, 7, u8)
+#define TCS34725_IOCTL_CONTROL _IOW(TCS34725_IOCTL_MAGIC, 8, u8)
+#define TCS34725_IOCTL_STATUS _IOR(TCS34725_IOCTL_MAGIC, 9, u8)
 
 static struct i2c_client *tcs34725_client;
 static struct class* tcs34725_class = NULL;
@@ -42,7 +50,12 @@ struct tcs34725_color{
     u16 blue;
 };  
 
-static int tcs34725_read(struct i2c_client *client, struct tcs34725_color *color)
+struct tcs34725_interrupt_threshold{
+    u16 high_threshold;
+    u16 low_threshold;
+};
+
+static int tcs34725_read_color(struct i2c_client *client, struct tcs34725_color *color)
 {
     u8 buf[8];
 
@@ -55,7 +68,7 @@ static int tcs34725_read(struct i2c_client *client, struct tcs34725_color *color
     color->clear = (buf[0] << 8) | buf[1]; // clear
     color->red = (buf[2] << 8) | buf[3]; // red
     color->green = (buf[4] << 8) | buf[5]; // green
-    color->blue = (buf[6] << 8) | buf[7]; // blue
+	color->blue = (buf[6] << 8) | buf[7]; // blue
 
     return 0;
 }
@@ -73,19 +86,62 @@ static int tcs34725_write(struct i2c_client *client, u8 reg_addr, u8 value)
 static long tcs34725_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
     struct tcs34725_color tcs_color;
-    
+    u8 value;
+    u8 data;
+
+    if(_IOC_DIR(cmd) & _IOC_WRITE){
+        if(copy_from_user((void __user *)arg, &value, sizeof(value))){
+            return -EFAULT;
+        }
+    }
+
     switch (cmd) {
     	case TCS34725_IOCTL_RGBC_DATA:
-            tcs34725_read(tcs34725_client, &tcs_color);
+            tcs34725_read_color(tcs34725_client, &tcs_color);
+            break;
+        case TCS34725_IOCTL_ENABLE:
+            tcs34725_write(tcs34725_client, ENABLE_REG, value);
+            break;
+        case TCS34725_IOCTL_TIMING:
+            tcs34725_write(tcs34725_client, RGBC_TIMING_REG, value);
+            break;
+        case TCS34725_IOCTL_WAIT_TIME:
+            tcs34725_write(tcs34725_client, WAIT_TIME_REG, value);
+            break;
+        case TCS34725_IOCTL_INTERRUPT_THRESHOLD:
+            tcs34725_write(tcs34725_client, RGBC_INTERUPT_THRESHOLD_REG, value);
+            break;
+        case TCS34725_IOCTL_PERSISTENCE:
+            tcs34725_write(tcs34725_client, PERSISTENCE_REG, value);
+            break;
+        case TCS34725_IOCTL_CONFIG:
+            tcs34725_write(tcs34725_client, CONFIG_REG, value);
+            break;
+        case TCS34725_IOCTL_CONTROL:
+            tcs34725_write(tcs34725_client, CONFIG_REG, value);
+            break;
+        case TCS34725_IOCTL_STATUS:
+            if(i2c_smbus_read_byte_data(tcs34725_client,STATUS_REG)<0){
+                printk(KERN_ERR "Failed to read register 0x%02x\n", STATUS_REG);
+                return -EIO;
+            }
+            data = i2c_smbus_read_byte_data(tcs34725_client,STATUS_REG);
+            if(_IOC_DIR(cmd) & _IOC_READ){
+                if (copy_to_user((void __user *)arg, &data, sizeof(data))) {
+                    return -EFAULT;
+                }
+            }
             break;
         default:
             return -EINVAL;
     }
 
-    if (copy_to_user((void __user *)arg, &tcs_color, sizeof(tcs_color))) {
-        return -EFAULT;
-    	}
-	
+    if(_IOC_DIR(cmd) & _IOC_READ){
+        if (copy_to_user((void __user *)arg, &tcs_color, sizeof(tcs_color))) {
+            return -EFAULT;
+        }
+    }
+    
     return 0;
 }
 
