@@ -12,16 +12,16 @@
 #define TCS34725_IOCTL_MAGIC 't'
 #define TCS34725_IOCTL_RGBC_DATA _IOR(TCS34725_IOCTL_MAGIC, 1, struct tcs34725_color)
 
-struct Color{
+struct tcs34725_color{
     uint16_t clear;
     uint16_t red;
     uint16_t green;
     uint16_t blue;
-}
+};
 
 int main(void){
 	int fd;
-    struct Color color;
+    struct tcs34725_color color;
 
 	// Open the device
 	fd = open(DEVICE_PATH, O_RDONLY);
@@ -37,10 +37,14 @@ int main(void){
             close(fd);
             return errno;
         }
+        
+        if (color.clear == 0) {
+            color.clear=1;
+        }
 
-        color->red = (color.red*255)/color.clear;
-        color->green = (color.green*255)/color.clear;
-        color->blue = (color.blue*255)/color.clear;
+        color.red = (color.red*255)/color.clear;
+        color.green = (color.green*255)/color.clear;
+        color.blue = (color.blue*255)/color.clear;
         
         printf("Red: %u\n", color.red);
         printf("Green: %u\n", color.green);
