@@ -25,20 +25,26 @@
 
 // IOCTL commands
 #define TCS34725_IOCTL_MAGIC 't'
-#define TCS34725_IOCTL_CLEAR _IOR(TCS34725_IOCTL_MAGIC, 1, int)
-#define TCS34725_IOCTL_RED _IOR(TCS34725_IOCTL_MAGIC, 2, int)
-#define TCS34725_IOCTL_GREEN _IOR(TCS34725_IOCTL_MAGIC, 3, int)
-#define TCS34725_IOCTL_BLUE _IOR(TCS34725_IOCTL_MAGIC, 4, int)
+#define TCS34725_IOCTL_RGBC_DATA _IOR(TCS34725_IOCTL_MAGIC, 1, struct tcs34725_color)
 
 static struct i2c_client *tcs34725_client;
 static struct class* tcs34725_class = NULL;
 static struct device* tcs34725_device = NULL;
 static int major_number;
 
-static int tcs34725_read(struct i2c_client *client, int channel)
+/* note when passing a struct as parameter to function. Must declared the struct first for the compiler to understand
+what type of struct you pass in the function, how many element it have, the compiler distinguish structs by their name. 
+So passing by their correct name you want */
+struct tcs34725_color{
+    u16 clear;
+    u16 red;
+    u16 green;
+    u16 blue;
+};  
+
+static int tcs34725_read(struct i2c_client *client, struct tcs34725_color *color)
 {
     u8 buf[8];
-    u16 RGBdata[4];
 
     if (i2c_smbus_read_i2c_block_data(client, CMD_BIT|TYPE_BIT|RGBC_CHANNEL_DATA_REG, sizeof(buf), buf) < 0) {
         printk(KERN_ERR "Failed to read color data register\n");
@@ -46,12 +52,12 @@ static int tcs34725_read(struct i2c_client *client, int channel)
     }
 
     // Combine high and low bytes to form 16-bit values
-    RGBdata[0] = (buf[0] << 8) | buf[1]; // clear
-    RGBdata[1] = (buf[2] << 8) | buf[3]; // red
-    RGBdata[2] = (buf[4] << 8) | buf[5]; // green
-	RGBdata[3] = (buf[6] << 8) | buf[7]; // blue
+    color->clear = (buf[0] << 8) | buf[1]; // clear
+    color->red = (buf[2] << 8) | buf[3]; // red
+    color->green = (buf[4] << 8) | buf[5]; // green
+    color->blue = (buf[6] << 8) | buf[7]; // blue
 
-    return RGBdata[channel];
+    return 0;
 }
 
 static int tcs34725_write(struct i2c_client *client, u8 reg_addr, u8 value)
@@ -66,26 +72,17 @@ static int tcs34725_write(struct i2c_client *client, u8 reg_addr, u8 value)
 
 static long tcs34725_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-    u16 data;
-
+    struct tcs34725_color tcs_color;
+    
     switch (cmd) {
-    	case TCS34725_IOCTL_CLEAR:
-             data = tcs34725_read(tcs34725_client, 0);
-             break;
-        case TCS34725_IOCTL_RED:
-            data = tcs34725_read(tcs34725_client, 1);
-            break;
-        case TCS34725_IOCTL_GREEN:
-            data = tcs34725_read(tcs34725_client, 2);
-            break;
-        case TCS34725_IOCTL_BLUE:
-            data = tcs34725_read(tcs34725_client, 3);
+    	case TCS34725_IOCTL_RGBC_DATA:
+            tcs34725_read(tcs34725_client, &tcs_color);
             break;
         default:
             return -EINVAL;
     }
 
-    if (copy_to_user((int __user *)arg, &data, sizeof(data))) {
+    if (copy_to_user((void __user *)arg, &tcs_color, sizeof(tcs_color))) {
         return -EFAULT;
     	}
 	
