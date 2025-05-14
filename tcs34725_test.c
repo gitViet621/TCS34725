@@ -10,15 +10,18 @@
 #define DEVICE_PATH "/dev/tcs34725"
 // IOCTL commands
 #define TCS34725_IOCTL_MAGIC 't'
-#define TCS34725_IOCTL_CLEAR _IOR(TCS34725_IOCTL_MAGIC, 1, int)
-#define TCS34725_IOCTL_RED _IOR(TCS34725_IOCTL_MAGIC, 2, int)
-#define TCS34725_IOCTL_GREEN _IOR(TCS34725_IOCTL_MAGIC, 3, int)
-#define TCS34725_IOCTL_BLUE _IOR(TCS34725_IOCTL_MAGIC, 4, int)
+#define TCS34725_IOCTL_RGBC_DATA _IOR(TCS34725_IOCTL_MAGIC, 1, struct tcs34725_color)
+
+struct Color{
+    uint16_t clear;
+    uint16_t red;
+    uint16_t green;
+    uint16_t blue;
+}
 
 int main(void){
 	int fd;
-	uint16_t data[4];
-	uint8_t rgb[3];
+    struct Color color;
 
 	// Open the device
 	fd = open(DEVICE_PATH, O_RDONLY);
@@ -28,44 +31,21 @@ int main(void){
 	}
 
 	while(1){
-	// Read clear light data
-    if (ioctl(fd, TCS34725_IOCTL_CLEAR, &data[0]) < 0) {
-        perror("Failed to read clear light data");
-        close(fd);
-        return errno;
-    }
+        //read color
+        if (ioctl(fd, TCS34725_IOCTL_RGBC_DATA, &color) < 0) {
+            perror("Failed to read clear light data");
+            close(fd);
+            return errno;
+        }
 
-    if(data[0]==0) data[0]=1;
-
-    // Read red data
-    if (ioctl(fd, TCS34725_IOCTL_RED, &data[1]) < 0) {
-        perror("Failed to read red data");
-        close(fd);
-        return errno;
-    }
-
-    // Read green data
-    if (ioctl(fd, TCS34725_IOCTL_GREEN, &data[2]) < 0) {
-        perror("Failed to read green data");
-        close(fd);
-        return errno;
-    }
-
-    // Read blue data
-    if (ioctl(fd, TCS34725_IOCTL_BLUE, &data[3]) < 0) {
-       perror("Failed to read blue data");
-       close(fd);
-       return errno;
-    }
-
-	rgb[0]=(data[1]*255)/data[0];
-	rgb[1]=(data[2]*255)/data[0];
-	rgb[2]=(data[3]*255)/data[0];
-	
-	printf("Red: %u\n", rgb[0]);
-	printf("Green: %u\n", rgb[1]);
-	printf("Blue: %u\n", rgb[2]);
-	delay(5000);
+        color->red = (color.red*255)/color.clear;
+        color->green = (color.green*255)/color.clear;
+        color->blue = (color.blue*255)/color.clear;
+        
+        printf("Red: %u\n", color.red);
+        printf("Green: %u\n", color.green);
+        printf("Blue: %u\n", color.blue);
+        delay(3000);
 	}
 	
 	return 0;
